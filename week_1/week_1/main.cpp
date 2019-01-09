@@ -1,6 +1,7 @@
 
 #include <iostream>
 #include <stdio.h>
+
 #include "opencv2/core.hpp"
 #include "opencv2/core/utility.hpp"
 #include "opencv2/core/ocl.hpp"
@@ -128,7 +129,7 @@ int main(int argc, char* argv[])
 
 		UMat img1;
 
-		std::string leftName = "object1.jpg";
+		std::string leftName = "dason.jpg";
 		imread(leftName, IMREAD_GRAYSCALE).copyTo(img1);
 		if (img1.empty())
 		{
