@@ -17,7 +17,7 @@ using namespace cv::xfeatures2d;
 double nMinHessian = 1000.;  //thresold
 
 
-int main()
+int main2()
 	{
 
 	    // 비교할 이미지 불러오기
@@ -103,7 +103,7 @@ int main()
 
 			for (int i = 0; i < matDescriptorsImage.rows; i++)
 			{
-				if (matches[i].distance < 3 * dMinDist)
+				if (matches[i].distance <= max(2* dMinDist,0.02))
 				{
 					good_matches.push_back(matches[i]);
 				}

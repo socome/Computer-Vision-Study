@@ -18,7 +18,10 @@
     <ClCompile Include="SURF_MAIN.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
-    <ClCompile Include="SIFT_MAIN.cpp">
+    <ClCompile Include="SIFT_MAIN_RANSAC.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="Brisk.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
   </ItemGroup>

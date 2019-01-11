@@ -1,3 +1,8 @@
-﻿  SIFT.cpp
-d:\computer-vision-study\week1_3\week1_3\sift.cpp(37): warning C4244: '인수': 'double'에서 'int'(으)로 변환하면서 데이터가 손실될 수 있습니다.
+﻿  Brisk.cpp
+d:\computer-vision-study\week1_3\week1_3\brisk.cpp(22): warning C4244: '초기화 중': 'double'에서 'int'(으)로 변환하면서 데이터가 손실될 수 있습니다.
+d:\computer-vision-study\week1_3\week1_3\brisk.cpp(152): warning C4244: '인수': 'int'에서 '_Tp'(으)로 변환하면서 데이터가 손실될 수 있습니다.
+          with
+          [
+              _Tp=float
+          ]
   week1_3.vcxproj -> D:\Computer-Vision-Study\week1_3\x64\Debug\week1_3.exe
