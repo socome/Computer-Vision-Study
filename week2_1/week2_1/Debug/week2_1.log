@@ -1,0 +1,2 @@
+﻿  first.cpp
+opencv_world343d.lib(opencv_world343d.dll) : fatal error LNK1112: 'x64' 모듈 컴퓨터 종류가 'x86' 대상 컴퓨터 종류와 충돌합니다.
