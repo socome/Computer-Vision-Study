@@ -1,7 +1,7 @@
+/*
 #include <opencv2/opencv.hpp>
 #include <opencv2/objdetect.hpp>
 #include <opencv2/ml.hpp>
-
 #include <iostream>
 
 
@@ -54,7 +54,7 @@ int main()
 	for (int num = 0; num < 10; num++)
 	{
 		cout << num << " image load" << endl;
-		for (int i = NUMBER_train; i < NUMBER_test+ NUMBER_train; i++)
+		for (int i = NUMBER_train; i < NUMBER_test + NUMBER_train; i++)
 		{
 			Mat MNIST = imread("./MNIST/data " + std::to_string(num) + "_" + std::to_string(i + 1) + ".PNG", COLOR_RGB2GRAY);
 			if (!(MNIST.data))
@@ -69,6 +69,7 @@ int main()
 		}
 
 	}
+
 	cout << "\n//////////////////////////////////////////////////////" << endl;
 
 	cout << "                      svm start                      " << endl;
@@ -80,6 +81,7 @@ int main()
 	Mat MNIST_train_HOG_Mat(MNIST_train_HOG.size(), descriptor_size, CV_32FC1);
 	Mat MNIST_test_HOG_Mat(MNIST_test_HOG.size(), descriptor_size, CV_32FC1);
 	ConvertVectortoMatrix(MNIST_train_HOG, MNIST_test_HOG, MNIST_train_HOG_Mat, MNIST_test_HOG_Mat);
+
 
 
 	cout << "\n//////////////////////////////////////////////////////" << endl;
@@ -96,7 +98,7 @@ int main()
 	CvSVM svm;
 
 
-	CvMat tryMat = MNIST_train_HOG_Mat;
+
 	Mat trainLabelsMat(MNIST_train_label.size(), 1, CV_32FC1);
 
 	for (int i = 0; i < MNIST_train_label.size(); i++)
@@ -104,9 +106,31 @@ int main()
 		trainLabelsMat.at<float>(i, 0) = MNIST_train_label[i];
 	}
 
+	cout << "\n//////////////////////////////////////////////////////" << endl;
+
+	cout << "                      svm train                      " << endl;
+
+	cout << "\n//////////////////////////////////////////////////////\n" << endl;
+
+	CvMat tryMat = MNIST_train_HOG_Mat;
 	CvMat tryMat_2 = trainLabelsMat;
 	svm.train(&tryMat, &tryMat_2, Mat(), Mat(), params);
+
+	cout << "\n//////////////////////////////////////////////////////" << endl;
+
+	cout << "                      svm save                   " << endl;
+
+	cout << "\n//////////////////////////////////////////////////////\n" << endl;
+	/// Save svm file
+	svm.save("MNIST_HOG_SVM.xml");
 	Mat testResponse;
+
+	cout << "\n//////////////////////////////////////////////////////" << endl;
+
+	cout << "                      svm predict                      " << endl;
+
+	cout << "\n//////////////////////////////////////////////////////\n" << endl;
+
 	svm.predict(MNIST_test_HOG_Mat, testResponse);
 
 	float count = 0, accuracy = 0;
@@ -172,3 +196,4 @@ void ConvertVectortoMatrix(vector<vector<float> > &trainHOG, vector<vector<float
 		}
 	}
 }
+*/

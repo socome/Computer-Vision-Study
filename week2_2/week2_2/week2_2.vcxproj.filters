@@ -24,5 +24,20 @@
     <ClCompile Include="MNIST_IMAGE_HOG.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
+    <ClCompile Include="MNIST_IMAGE_HOG_SVM_LOAD.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="test_read.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="MNIST_CNN_SVM.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="MNIST_CNN_SVM_LOAD.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="test.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

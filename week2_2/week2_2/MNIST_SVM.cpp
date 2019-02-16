@@ -4,13 +4,13 @@
 #include <string>
 
 #include <opencv2/opencv.hpp>
-
+/*
 using namespace std;
 
 int ReverseInt(int i);
 void ReadMNIST(int NumberOfImages, int DataOfAnImage, vector<vector<double>> &arr);
 void ReadMNISTLabel(vector<unsigned char> &arr);
-/*
+
 void main()
 {
 	vector<vector<double>> MNIST_DATA;
@@ -20,7 +20,7 @@ void main()
 	ReadMNISTLabel(MNIST_LABEL);
 
 }
-*/
+
 int ReverseInt(int i)
 {
 	unsigned char ch1, ch2, ch3, ch4;
@@ -75,3 +75,4 @@ void ReadMNISTLabel(vector<unsigned char> &arr)
 
 	}
 }
+*/

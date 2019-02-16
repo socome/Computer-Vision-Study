@@ -131,9 +131,14 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="MNIST_CNN_SVM.cpp" />
+    <ClCompile Include="MNIST_CNN_SVM_LOAD.cpp" />
     <ClCompile Include="MNIST_cut.cpp" />
     <ClCompile Include="MNIST_IMAGE_HOG.cpp" />
+    <ClCompile Include="MNIST_IMAGE_HOG_SVM_LOAD.cpp" />
     <ClCompile Include="MNIST_SVM.cpp" />
+    <ClCompile Include="test.cpp" />
+    <ClCompile Include="test_read.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
