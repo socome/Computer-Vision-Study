@@ -1,6 +1,11 @@
-/*
 #include "dirent.h"
 #include <iostream>
+#include <iostream>
+#include <io.h>
+#include <stdlib.h>
+#include <direct.h>
+#include "corecrt_io.h"
+
 #include <opencv2/opencv.hpp>
 #include "opencv2/xfeatures2d.hpp"
 #include <opencv2/ml.hpp>
@@ -10,53 +15,84 @@ using namespace cv;
 using namespace cv::xfeatures2d;
 using namespace ml;
 
+#define SMPLE_CLASS 20
+
 Mat train_descriptor(Mat img1);
 static bool writeVocabulary(const string& filename, const Mat& vocabulary);
 static bool readVocabulary(const string& filename, Mat& vocabulary);
 
+String folderpath = "./101_ObjectCategories/*.*";
+String folder_folderpath = "./101_ObjectCategories/";
+
 int main()
 {
-
 	Ptr<FeatureDetector> Detector = SIFT::create();
 	Ptr<DescriptorExtractor> extractor = SIFT::create();
+	/*
+	Mat training_descriptors_S;
 
-	String folderpath = "D:/Computer-Vision-Study/week2_1/week2_1/dataset/last_test/train/";
-	vector<String> filenames;
-	Mat training_descriptors_S(1, extractor->descriptorSize(), extractor->descriptorType());
-	glob(folderpath, filenames);
+	struct _finddata_t fd;
+	intptr_t handle;
+	if ((handle = _findfirst(folderpath.c_str(), &fd)) == -1L) cout << "No file in directory!" << endl;
+	int i = 0;
+	int sample_cnt = 0;
+
+	do{
+		if(i>= 2)
+		{
+			vector<String> filenames;
+
+			glob(folder_folderpath + fd.name, filenames);
+
+			if (filenames.size() > 100) continue;
+			else
+			{
+				cout << fd.name << endl;
+				sample_cnt++;
+			}
 
 
-	cout << "\n------- file load ---------\n" << endl;
+			for (size_t j = 0; j < filenames.size(); j++)
+			{
 
-	cout << "Train data file size =  " << filenames.size() << endl;
+				cout << ".....";
 
-	for (size_t i = 0; i < filenames.size(); i++)
-	{
-		vector< KeyPoint > Keypoint_img;
-		Mat img1_descriptors;
+				vector< KeyPoint > Keypoint_img;
+				Mat img1_descriptors;
 
-		Mat img_read = imread(filenames[i], IMREAD_GRAYSCALE);
+				Mat img_read = imread(filenames[j], IMREAD_GRAYSCALE);
 
-		Detector->detect(img_read, Keypoint_img);
-		extractor->compute(img_read, Keypoint_img, img1_descriptors);
+				Detector->detect(img_read, Keypoint_img);
+				extractor->compute(img_read, Keypoint_img, img1_descriptors);
 
-		Mat descriptors = train_descriptor(img_read);
-		training_descriptors_S.push_back(descriptors);
+				Mat descriptors = train_descriptor(img_read);
+				training_descriptors_S.push_back(descriptors);
+				
+				cout << "\b\b\b\b\b";
+				
+			}
+		}
 
-		cout << filenames[i] << "  load" << endl;
-	}
+		i++;
+
+		if (sample_cnt > SMPLE_CLASS) break;
+
+	} while (_findnext(handle, &fd) == 0 );
+
+	_findclose(handle);
+
+	cout << "-----------------\nBOW START\n-----------------" << endl;
 
 	Mat vocabulary;
-	vocabulary.create(0, 1, CV_32F);
 	TermCriteria terminate_criterion;
 	terminate_criterion.epsilon = FLT_EPSILON;
-	int num_cluster = 100;
+	int num_cluster = 300;
 	BOWKMeansTrainer bowtrainer(num_cluster, terminate_criterion, 3, KMEANS_PP_CENTERS);
 	bowtrainer.add(training_descriptors_S);
 
 	cout << "Total descriptors: " << training_descriptors_S.rows << endl;
 
-	cout << "-----------------\nTrain set\n-----------------\n" << endl;
+	cout << "-----------------\nTRAIN SET\n-----------------\n" << endl;
 
 
 	vocabulary = bowtrainer.cluster();
@@ -66,153 +102,199 @@ int main()
 	bowide.setVocabulary(vocabulary);
 
 	writeVocabulary("vocabulary", vocabulary);
+	*/
 
-	//cout << "-------vocabulary ---------\n";
-	//cout << vocabulary << endl;
-	//cout << "\n\n";
+		
+	Mat vocabulary;
+	readVocabulary("vocabulary", vocabulary);
+
+	Ptr<DescriptorMatcher> matcher = BFMatcher::create();
+	BOWImgDescriptorExtractor bowide(extractor, matcher);
+	bowide.setVocabulary(vocabulary);
 
 	Mat train_samples;
 	Mat labels;
-	train_samples.create(0, 0, CV_32F);
-	labels.create(0, 1, CV_32SC1);
-
 	
-	cout << "\n------- positive images ---------\n" << endl;
+	Mat train_answer = (Mat_<float>(43, 1) << 1, 9, 7, 9, 11, 8, 8, 4, 7, 2, 7, 5, 9, 11, 6, 7, 5, 8, 5, 6, 11, 8, 11, 6, 8, 5, 4, 3, 3, 3, 11, 1, 9, 2, 3, 5, 4, 11, 11, 10, 10, 10, 10);
+	Mat test_answer = (Mat_<float>(39, 1) << 3, 7, 7, 9, 10, 11, 8, 11, 10, 9, 3, 9, 10, 8, 7, 11, 6, 8, 4, 6, 5, 5, 1, 2, 1, 4, 5, 10, 6, 2, 3, 9, 1, 4, 11, 5, 1, 8, 8);
+
+	cout << "\n------- SVM TRAIN ---------\n" << endl;
 	
-	Mat samples;
 
-	String folderpath_p = "D:/Computer-Vision-Study/week2_1/week2_1/dataset/last_test/pos/";
-	vector<String> filenames_p;
-	glob(folderpath_p, filenames_p);
-	for (size_t i = 0; i < filenames_p.size(); i++)
-	{
-		vector< KeyPoint > Keypoint_img_p;
-		Mat img= imread(filenames_p[i], IMREAD_GRAYSCALE);
+	Mat SVM_train_data(0,1000, CV_32FC1);
+	Mat SVM_train_label(0,1, CV_32FC1);
 
-		extractor->detect(img, Keypoint_img_p);
-		if (Keypoint_img_p.empty()) cout << "No keypoints found." << endl;
+	//(CNN_test_data_label.size(), 1, CV_32FC1)
 
-		// Responses to the vocabulary
-		Mat response_hist_p;
-		bowide.compute(img, Keypoint_img_p, response_hist_p);
-		if (response_hist_p.empty()) cout << "No descriptors found." << endl;
+	struct _finddata_t fd_train;
+	intptr_t handle_train;
+	if ((handle_train = _findfirst(folderpath.c_str(), &fd_train)) == -1L) cout << "No file in directory!" << endl;
 
-		cout << "-------imgDescriptor : " << filenames_p[i] << "---------\n";
-		cout << response_hist_p << endl;
-		cout << "\n";
+	int i = 0;
+	int sample_cnt = 0;
 
-
-		if (samples.empty())
+	do{
+		if(i>= 2)
 		{
-			samples.create(0, response_hist_p.cols, response_hist_p.type());
+			vector<String> filenames;
+
+			glob(folder_folderpath + fd_train.name, filenames);
+
+			if (filenames.size() > 100) continue;
+			else
+			{
+				sample_cnt++;
+				cout << fd_train.name << " : " << sample_cnt << endl;
+			}
+
+
+			for (size_t j = 0; j < filenames.size(); j++)
+			{
+
+				cout << ".....";
+
+				vector< KeyPoint > Keypoint_img_train;
+
+				Mat img_read = imread(filenames[j], IMREAD_GRAYSCALE);
+
+				extractor->detect(img_read, Keypoint_img_train);
+				if (Keypoint_img_train.empty()) cout << "No keypoints found." << endl;
+
+				// Responses to the vocabulary
+				Mat response_hist_train;
+
+				bowide.compute(img_read, Keypoint_img_train, response_hist_train);
+				if (response_hist_train.empty()) cout << "No descriptors found." << endl;
+
+				SVM_train_data.push_back(response_hist_train);
+				SVM_train_label.push_back(sample_cnt);
+
+				
+				cout << "\b\b\b\b\b";
+
+
+			}
 		}
 
-		//Copy class samples and labels
-		samples.push_back(response_hist_p);
+		i++;
 
-		Mat classLabels = Mat::ones(response_hist_p.rows, 1, CV_32SC1);
-		labels.push_back(classLabels);
+		if (sample_cnt > SMPLE_CLASS) break;
 
-	}
-	cout << "Adding " << filenames_p.size() << " positive sample." << endl;
+	} while (_findnext(handle_train, &fd_train) == 0 );
 
-	cout << "------- negative images---------" << endl;
-
-	String folderpath_n = "D:/Computer-Vision-Study/week2_1/week2_1/dataset/last_test/neg/";
-	vector<String> filenames_n;
-	glob(folderpath_n, filenames_n);
-	for (size_t i = 0; i < filenames_n.size(); i++)
-	{
-		vector< KeyPoint > Keypoint_img_n;
-		Mat img = imread(filenames_n[i], IMREAD_GRAYSCALE);
-		extractor->detect(img, Keypoint_img_n);
-		if (Keypoint_img_n.empty()) cout << "No keypoints found." << endl;
-
-		// Responses to the vocabulary
-		Mat response_hist_n;
-		bowide.compute(img, Keypoint_img_n, response_hist_n);
-		if (response_hist_n.empty()) cout << "No descriptors found." << endl;
-
-		cout << "-------imgDescriptor : " << filenames_n[i] << "---------\n";
-		cout << response_hist_n << endl;
-		cout << "\n\n";
-
-		//Copy class samples and labels
-		samples.push_back(response_hist_n);
-
-		Mat classLabels = -Mat::ones(response_hist_n.rows, 1, CV_32SC1);
-		labels.push_back(classLabels);
-
-
-	}
-	cout << "Adding " << filenames_n.size() << " negative sample." << endl;
-
-
-	cout << "\n------- training ---------\n" << endl;
+	_findclose(handle_train);
 
 	
+	cout << "\n------- SVM TRAIN AUTO ---------\n" << endl;
 
-	Ptr<SVM> svm = SVM::create();
+
+	Ptr<SVM> svm = SVM::create(); 
 	svm->setType(SVM::C_SVC);
 	svm->setKernel(SVM::RBF);
-	svm->setTermCriteria(TermCriteria(TermCriteria::MAX_ITER, 100, 1e-6));
+	svm->setTermCriteria(TermCriteria(TermCriteria::EPS, 100, 1e-6));
+	svm->setGamma(1.0);
+	svm->setC(1.0);
 
 
-	cout << "-------train_samples ---------\n";
-	cout << samples << endl;
+	// Train the SVM with given parameters
+	Ptr<TrainData> td = TrainData::create(SVM_train_data, ROW_SAMPLE, SVM_train_label);
+	svm->trainAuto(td);
+	svm->save("svm_train.xml");
+
+	cout << "-------SVM_TRAIN SAVE ---------\n";
 	cout << "\n\n";
 
-	cout << "-------labels : ---------\n";
-	cout << labels << endl;
-	cout << "\n\n";
+	Mat result_train;
+	Mat result_test;
 
+	cout << "\n------- TRAIN ---------\n" << endl;
 
-	svm->train(samples, ROW_SAMPLE, labels);
-	// Do something with the classifier, like saving it to file
+	Mat TRAIN_descriptor;	// Responses to the vocabulary
+	String folderpath_train = "./train_image/";
+	vector<String> filenames_train;
+	glob(folderpath_train, filenames_train);
 
-	cout << "-------SVM_train save ---------\n";
-	cout << "\n\n";
+	float count_train = 0, accuracy_train = 0;
 
-	svm->save("train.xml");
-
-
-	cout << "\n------- test ---------\n" << endl;
-
-	String folderpath_test = "D:/Computer-Vision-Study/week2_1/week2_1/dataset/last_test/test/";
-	vector<String> filenames_test;
-	glob(folderpath_test, filenames_test);
-	for (size_t i = 0; i < filenames_test.size(); i++)
+	for (size_t i = 0; i < filenames_train.size(); i++)
 	{
 
-		vector< KeyPoint > Keypoint_img_t;
+		vector< KeyPoint > Keypoint_img_train;
 
-		Mat img_t = imread(filenames_test[i], IMREAD_GRAYSCALE);
-		extractor->detect(img_t, Keypoint_img_t);
-		if (Keypoint_img_t.empty()) cout << "No keypoints found." << endl;
+		Mat img_t = imread(filenames_train[i], IMREAD_GRAYSCALE);
+		extractor->detect(img_t, Keypoint_img_train);
+		if (Keypoint_img_train.empty()) cout << "No keypoints found." << endl;
 
 		// Responses to the vocabulary
-		Mat imgDescriptor_t;
-		bowide.compute(img_t, Keypoint_img_t, imgDescriptor_t);
-		if (imgDescriptor_t.empty()) cout << "No descriptors found." << endl;
+		Mat imgDescriptor_train;
+		bowide.compute(img_t, Keypoint_img_train, imgDescriptor_train);
+		if (imgDescriptor_train.empty()) cout << "No descriptors found." << endl;
 
-		cout << "-------imgDescriptor : " << i << "---------\n";
-		cout << imgDescriptor_t << endl;
-		cout << "\n\n";
-
-		float reulst = svm->predict(imgDescriptor_t);
-
-		cout << reulst << endl;
-
-		if (reulst == 1) cout << " This is car" << endl;
-		else cout << " This is airplane" << endl;
-
-		imshow("test", img_t);
-		waitKey(200);
-
-		
+		TRAIN_descriptor.push_back(imgDescriptor_train);
 
 	}
+
+	svm->predict(TRAIN_descriptor, result_train);
+
+	for (i = 0; i < train_answer.rows; i++)
+	{
+		if (result_train.at<float>(i, 0) == train_answer.at<float>(i, 0))
+		{
+			count_train = count_train + 1;
+		}
+	}
+
+	accuracy_train = (count_train / train_answer.rows) * 100;
+	cout << "accuracy : " << accuracy_train << endl;
+
+
+
+	cout << "\n------- TEST ---------\n" << endl;
+
+
+	Mat TEST_descriptor;	// Responses to the vocabulary
+	String folderpath_test = "./test_image/";
+	vector<String> filenames_test;
+	glob(folderpath_test, filenames_test);
+
+	float count_test = 0, accuracy_test = 0;
+
+	for (size_t i = 0; i < filenames_test.size(); i++)
+	{
+		Mat imgDescriptor_test;
+
+		vector< KeyPoint > Keypoint_img_test;
+
+		Mat img_t = imread(filenames_test[i], IMREAD_GRAYSCALE);
+		extractor->detect(img_t, Keypoint_img_test);
+		if (Keypoint_img_test.empty()) cout << "No keypoints found." << endl;
+
+		bowide.compute(img_t, Keypoint_img_test, imgDescriptor_test);
+		if (imgDescriptor_test.empty()) cout << "No descriptors found." << endl;
+
+		TEST_descriptor.push_back(imgDescriptor_test);
+
+	}
+
+	svm->predict(TEST_descriptor, result_test);
+
+	cout << "test : \n" << result_test << endl;
+
+	for (i = 0; i < test_answer.rows; i++)
+	{
+		if (result_test.at<float>(i, 0) == test_answer.at<float>(i, 0))
+		{
+			count_test = count_test + 1;
+		}
+	}
+
+
+	accuracy_test = (count_test / test_answer.rows) * 100;
+
+	cout << "accuracy : " << accuracy_test << endl;
+	
 	return 0;
+	
 	
 }
 
@@ -260,4 +342,3 @@ static bool readVocabulary(const string& filename, Mat& vocabulary)
 	}
 	return false;
 }
-*/
