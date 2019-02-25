@@ -1,6 +1,9 @@
 #include "dirent.h"
 #include <iostream>
 #include <iostream>
+#include <fstream>
+#include <sstream> 
+#include <string> 
 #include <io.h>
 #include <stdlib.h>
 #include <direct.h>
@@ -15,7 +18,11 @@ using namespace cv;
 using namespace cv::xfeatures2d;
 using namespace ml;
 
-#define SMPLE_CLASS 20
+#define SMPLE_CLASS 4
+#define num_cluster 200
+#define SPATIAL_LEVEL 2
+#define SELECT_LEVE 2
+#define SPM_MODE 1 // (1: NOMAL / 2: PYRAMID)
 
 Mat train_descriptor(Mat img1);
 static bool writeVocabulary(const string& filename, const Mat& vocabulary);
@@ -44,12 +51,8 @@ int main()
 
 			glob(folder_folderpath + fd.name, filenames);
 
-			if (filenames.size() > 100) continue;
-			else
-			{
-				cout << fd.name << endl;
-				sample_cnt++;
-			}
+			cout << fd.name << endl;
+			sample_cnt++;
 
 
 			for (size_t j = 0; j < filenames.size(); j++)
@@ -60,16 +63,17 @@ int main()
 				vector< KeyPoint > Keypoint_img;
 				Mat img1_descriptors;
 
-				Mat img_read = imread(filenames[j], IMREAD_GRAYSCALE);
+				Mat img_read = imread(filenames[j],IMREAD_GRAYSCALE);
+
 
 				Detector->detect(img_read, Keypoint_img);
 				extractor->compute(img_read, Keypoint_img, img1_descriptors);
 
 				Mat descriptors = train_descriptor(img_read);
 				training_descriptors_S.push_back(descriptors);
-				
+
 				cout << "\b\b\b\b\b";
-				
+
 			}
 		}
 
@@ -86,7 +90,6 @@ int main()
 	Mat vocabulary;
 	TermCriteria terminate_criterion;
 	terminate_criterion.epsilon = FLT_EPSILON;
-	int num_cluster = 300;
 	BOWKMeansTrainer bowtrainer(num_cluster, terminate_criterion, 3, KMEANS_PP_CENTERS);
 	bowtrainer.add(training_descriptors_S);
 
@@ -97,16 +100,17 @@ int main()
 
 	vocabulary = bowtrainer.cluster();
 
-	Ptr<DescriptorMatcher> matcher = BFMatcher::create();
+	Ptr<DescriptorMatcher> matcher = FlannBasedMatcher::create();
 	BOWImgDescriptorExtractor bowide(extractor, matcher);
 	bowide.setVocabulary(vocabulary);
 
-	writeVocabulary("vocabulary", vocabulary);
+	writeVocabulary("vocabulary_"+to_string(SMPLE_CLASS + 1)+"_"+to_string(num_cluster), vocabulary);
 	*/
 
-		
+
+
 	Mat vocabulary;
-	readVocabulary("vocabulary", vocabulary);
+	readVocabulary("vocabulary_" + to_string(num_cluster), vocabulary);
 
 	Ptr<DescriptorMatcher> matcher = BFMatcher::create();
 	BOWImgDescriptorExtractor bowide(extractor, matcher);
@@ -114,17 +118,20 @@ int main()
 
 	Mat train_samples;
 	Mat labels;
-	
-	Mat train_answer = (Mat_<float>(43, 1) << 1, 9, 7, 9, 11, 8, 8, 4, 7, 2, 7, 5, 9, 11, 6, 7, 5, 8, 5, 6, 11, 8, 11, 6, 8, 5, 4, 3, 3, 3, 11, 1, 9, 2, 3, 5, 4, 11, 11, 10, 10, 10, 10);
-	Mat test_answer = (Mat_<float>(39, 1) << 3, 7, 7, 9, 10, 11, 8, 11, 10, 9, 3, 9, 10, 8, 7, 11, 6, 8, 4, 6, 5, 5, 1, 2, 1, 4, 5, 10, 6, 2, 3, 9, 1, 4, 11, 5, 1, 8, 8);
 
 	cout << "\n------- SVM TRAIN ---------\n" << endl;
-	
 
-	Mat SVM_train_data(0,1000, CV_32FC1);
-	Mat SVM_train_label(0,1, CV_32FC1);
 
-	//(CNN_test_data_label.size(), 1, CV_32FC1)
+	Mat SVM_train_data(0, 0, CV_32FC1);
+	Mat SVM_train_label(0, 1, CV_32FC1);
+	Mat levelBowdescriptors[SPATIAL_LEVEL + 1];
+	Mat levelBowdescriptor;
+	Mat croppedBowdecriptor;
+	Mat croppedImage;
+
+	Size s;
+	Size s1;
+	int rows, cols, X, Y, width, height;
 
 	struct _finddata_t fd_train;
 	intptr_t handle_train;
@@ -133,23 +140,22 @@ int main()
 	int i = 0;
 	int sample_cnt = 0;
 
-	do{
-		if(i>= 2)
+	do {
+		if (i >= 2)
 		{
 			vector<String> filenames;
 
 			glob(folder_folderpath + fd_train.name, filenames);
 
-			if (filenames.size() > 100) continue;
-			else
-			{
-				sample_cnt++;
-				cout << fd_train.name << " : " << sample_cnt << endl;
-			}
+
+			sample_cnt++;
+			cout << fd_train.name << " : " << sample_cnt << endl;
 
 
 			for (size_t j = 0; j < filenames.size(); j++)
 			{
+				if (filenames.size() <= 30) continue;
+				if (j >= 30) continue;
 
 				cout << ".....";
 
@@ -157,19 +163,95 @@ int main()
 
 				Mat img_read = imread(filenames[j], IMREAD_GRAYSCALE);
 
-				extractor->detect(img_read, Keypoint_img_train);
-				if (Keypoint_img_train.empty()) cout << "No keypoints found." << endl;
+				s = img_read.size();
+				rows = s.height;
+				cols = s.width;
 
-				// Responses to the vocabulary
-				Mat response_hist_train;
+				X = 0;
+				Y = 0;
+				width = cols / 2;
+				height = rows / 2;
 
-				bowide.compute(img_read, Keypoint_img_train, response_hist_train);
-				if (response_hist_train.empty()) cout << "No descriptors found." << endl;
+				// Level 0 to L
+				for (int k = 0; k <= SPATIAL_LEVEL; k++)
+				{
+					width = cols / pow(2, k);
+					height = rows / pow(2, k);
 
-				SVM_train_data.push_back(response_hist_train);
-				SVM_train_label.push_back(sample_cnt);
+					Mat levelBowdescriptor;
 
+					for (int m = 0; m < pow(2, 2 * k); m++)
+					{
+						// Set the left corner of subimage
+						X = (m % (int)pow(2, k)) * width;
+						Y = (m / (int)pow(2, k)) * height;
+
+
+						// Get the subimage
+
+						croppedImage = img_read(Rect(X, Y, width, height));
+
+						Keypoint_img_train.clear();
+
+						extractor->detect(img_read, Keypoint_img_train);
+						if (Keypoint_img_train.empty()) cout << "No keypoints found." << endl;
+
+						bowide.compute(img_read, Keypoint_img_train, croppedBowdecriptor);
+						if (croppedBowdecriptor.empty()) cout << "No descriptors found." << endl;
+
+						s1 = croppedBowdecriptor.size();
+
+						if (s1.width == 0)
+						{
+							croppedBowdecriptor = Mat(1, 200, CV_32F, Scalar(0.));
+							s1 = croppedBowdecriptor.size();
+						}
+
+						if (m == 0)
+						{
+							levelBowdescriptor = croppedBowdecriptor;
+						}
+						else
+						{
+							hconcat(levelBowdescriptor, croppedBowdecriptor, levelBowdescriptor);
+						}
+					}
+
+					//Feature vectors of each levels
+					levelBowdescriptors[k] = levelBowdescriptor;
+
+				}
 				
+				if (SPM_MODE == 1)
+				{
+					SVM_train_data.push_back(levelBowdescriptors[SELECT_LEVE]);
+					SVM_train_label.push_back(sample_cnt);
+				}
+				else if (SPM_MODE == 2)
+				{
+
+					Mat pyramid_levelBowdescriptor;
+
+					for (int p = 0; p < SPATIAL_LEVEL + 1; p++)
+					{
+						float weight = ((float)pow(2, 2 - p));
+						levelBowdescriptors[p] = levelBowdescriptors[p] / weight;
+
+						if (p == 0)
+						{
+							pyramid_levelBowdescriptor = levelBowdescriptors[0];
+						}
+						else
+						{
+							hconcat(pyramid_levelBowdescriptor, levelBowdescriptors[p], pyramid_levelBowdescriptor);
+						}
+					}
+
+
+					SVM_train_data.push_back(pyramid_levelBowdescriptor);
+					SVM_train_label.push_back(sample_cnt);
+				}
+
 				cout << "\b\b\b\b\b";
 
 
@@ -180,122 +262,335 @@ int main()
 
 		if (sample_cnt > SMPLE_CLASS) break;
 
-	} while (_findnext(handle_train, &fd_train) == 0 );
+	} while (_findnext(handle_train, &fd_train) == 0);
 
 	_findclose(handle_train);
 
-	
+	FileStorage fs1("SVM_train_data.yml", FileStorage::WRITE);
+	fs1 << "SVM_train_data" << SVM_train_data;
+	fs1.release();
+	FileStorage fs2("SVM_train_label.yml", FileStorage::WRITE);
+	fs2 << "SVM_train_label" << SVM_train_label;
+	fs2.release();
+	/*
+	// Load the vocabulary from file.
+	Mat SVM_train_data(0, 0, CV_32FC1);;
+	FileStorage fs1("SVM_train_data.yml", FileStorage::READ);
+	fs1["SVM_train_data"] >> SVM_train_data;
+	fs1.release();
+	Mat SVM_train_label(0, 1, CV_32FC1);;
+	FileStorage fs2("SVM_train_label.yml", FileStorage::READ);
+	fs2["SVM_train_label"] >> SVM_train_label;
+	fs2.release();
+	*/
+
 	cout << "\n------- SVM TRAIN AUTO ---------\n" << endl;
 
-
-	Ptr<SVM> svm = SVM::create(); 
+	Ptr<SVM> svm = SVM::create();
 	svm->setType(SVM::C_SVC);
 	svm->setKernel(SVM::RBF);
-	svm->setTermCriteria(TermCriteria(TermCriteria::EPS, 100, 1e-6));
+	svm->setTermCriteria(TermCriteria(TermCriteria::MAX_ITER, 1000, 1e-6));
 	svm->setGamma(1.0);
 	svm->setC(1.0);
-
 
 	// Train the SVM with given parameters
 	Ptr<TrainData> td = TrainData::create(SVM_train_data, ROW_SAMPLE, SVM_train_label);
 	svm->trainAuto(td);
-	svm->save("svm_train.xml");
-
-	cout << "-------SVM_TRAIN SAVE ---------\n";
-	cout << "\n\n";
-
-	Mat result_train;
-	Mat result_test;
 
 	cout << "\n------- TRAIN ---------\n" << endl;
 
-	Mat TRAIN_descriptor;	// Responses to the vocabulary
-	String folderpath_train = "./train_image/";
-	vector<String> filenames_train;
-	glob(folderpath_train, filenames_train);
-
+	Mat result_train;
 	float count_train = 0, accuracy_train = 0;
 
-	for (size_t i = 0; i < filenames_train.size(); i++)
+	svm->predict(SVM_train_data, result_train);
+
+	for (int i = 0; i < SVM_train_label.rows; i++)
 	{
-
-		vector< KeyPoint > Keypoint_img_train;
-
-		Mat img_t = imread(filenames_train[i], IMREAD_GRAYSCALE);
-		extractor->detect(img_t, Keypoint_img_train);
-		if (Keypoint_img_train.empty()) cout << "No keypoints found." << endl;
-
-		// Responses to the vocabulary
-		Mat imgDescriptor_train;
-		bowide.compute(img_t, Keypoint_img_train, imgDescriptor_train);
-		if (imgDescriptor_train.empty()) cout << "No descriptors found." << endl;
-
-		TRAIN_descriptor.push_back(imgDescriptor_train);
-
-	}
-
-	svm->predict(TRAIN_descriptor, result_train);
-
-	for (i = 0; i < train_answer.rows; i++)
-	{
-		if (result_train.at<float>(i, 0) == train_answer.at<float>(i, 0))
+		if (result_train.at<float>(i, 0) == SVM_train_label.at<int>(i, 0))
 		{
 			count_train = count_train + 1;
 		}
 	}
 
-	accuracy_train = (count_train / train_answer.rows) * 100;
+	accuracy_train = (count_train / SVM_train_label.rows) * 100;
 	cout << "accuracy : " << accuracy_train << endl;
-
 
 
 	cout << "\n------- TEST ---------\n" << endl;
 
+	Mat test_data(0, 0, CV_32FC1);;
+	Mat test_data_label(0, 1, CV_32FC1);;
 
-	Mat TEST_descriptor;	// Responses to the vocabulary
-	String folderpath_test = "./test_image/";
-	vector<String> filenames_test;
-	glob(folderpath_test, filenames_test);
+	struct _finddata_t fd_test;
+	intptr_t handle_test;
+	if ((handle_test = _findfirst(folderpath.c_str(), &fd_test)) == -1L) cout << "No file in directory!" << endl;
 
+	i = 0;
+	sample_cnt = 0;
+
+	do {
+		if (i >= 2)
+		{
+			vector<String> filenames;
+
+			glob(folder_folderpath + fd_test.name, filenames);
+
+			sample_cnt++;
+			cout << fd_test.name << " : " << sample_cnt << endl;
+
+			for (size_t j = 0; j < filenames.size(); j++)
+			{
+				if (filenames.size() <= 30)
+				{
+					cout << ".....";
+
+					vector< KeyPoint > Keypoint_img_test;
+
+					Mat img_read = imread(filenames[j], IMREAD_GRAYSCALE);
+
+					s = img_read.size();
+					rows = s.height;
+					cols = s.width;
+
+					X = 0;
+					Y = 0;
+					width = cols / 2;
+					height = rows / 2;
+
+					// Level 0 to L
+					for (int k = 0; k <= SPATIAL_LEVEL; k++)
+					{
+						width = cols / pow(2, k);
+						height = rows / pow(2, k);
+
+						Mat levelBowdescriptor;
+
+						for (int m = 0; m < pow(2, 2 * k); m++)
+						{
+							// Set the left corner of subimage
+							X = (m % (int)pow(2, k)) * width;
+							Y = (m / (int)pow(2, k)) * height;
+
+
+							// Get the subimage
+
+							croppedImage = img_read(Rect(X, Y, width, height));
+
+							Keypoint_img_test.clear();
+
+							extractor->detect(img_read, Keypoint_img_test);
+							if (Keypoint_img_test.empty()) cout << "No keypoints found." << endl;
+
+							bowide.compute(img_read, Keypoint_img_test, croppedBowdecriptor);
+							if (croppedBowdecriptor.empty()) cout << "No descriptors found." << endl;
+
+							s1 = croppedBowdecriptor.size();
+
+							if (s1.width == 0)
+							{
+								croppedBowdecriptor = Mat(1, 200, CV_32F, Scalar(0.));
+								s1 = croppedBowdecriptor.size();
+							}
+
+							if (m == 0)
+							{
+								levelBowdescriptor = croppedBowdecriptor;
+							}
+							else
+							{
+								hconcat(levelBowdescriptor, croppedBowdecriptor, levelBowdescriptor);
+							}
+						}
+
+						//Feature vectors of each levels
+						levelBowdescriptors[k] = levelBowdescriptor;
+
+					}
+
+					if (SPM_MODE == 1)
+					{
+						test_data.push_back(levelBowdescriptors[SELECT_LEVE]);
+						test_data_label.push_back(sample_cnt);
+					}
+					else if (SPM_MODE == 2)
+					{
+						Mat pyramid_levelBowdescriptor;
+						for (int p = 0; p < SELECT_LEVE + 1; p++)
+						{
+							float weight = ((float)pow(2, 2 - p));
+							levelBowdescriptors[p] = levelBowdescriptors[p] / weight;
+
+							if (p == 0)
+							{
+								pyramid_levelBowdescriptor = levelBowdescriptors[0];
+							}
+							else
+							{
+								hconcat(pyramid_levelBowdescriptor, levelBowdescriptors[p], pyramid_levelBowdescriptor);
+							}
+						}
+						test_data.push_back(pyramid_levelBowdescriptor);
+						test_data_label.push_back(sample_cnt);
+					}
+
+
+					cout << "\b\b\b\b\b";
+				}
+				else if (j >= 30)
+				{
+					if (j >= 80) continue;
+
+					cout << ".....";
+
+					vector< KeyPoint > Keypoint_img_test;
+
+					Mat img_read = imread(filenames[j],IMREAD_GRAYSCALE);
+
+					s = img_read.size();
+					rows = s.height;
+					cols = s.width;
+
+					X = 0;
+					Y = 0;
+					width = cols / 2;
+					height = rows / 2;
+
+					// Level 0 to L
+					for (int k = 0; k <= SPATIAL_LEVEL; k++)
+					{
+						width = cols / pow(2, k);
+						height = rows / pow(2, k);
+
+						Mat levelBowdescriptor;
+
+						for (int m = 0; m < pow(2, 2 * k); m++)
+						{
+							// Set the left corner of subimage
+							X = (m % (int)pow(2, k)) * width;
+							Y = (m / (int)pow(2, k)) * height;
+
+
+							// Get the subimage
+
+							croppedImage = img_read(Rect(X, Y, width, height));
+
+							Keypoint_img_test.clear();
+
+							extractor->detect(img_read, Keypoint_img_test);
+							if (Keypoint_img_test.empty()) cout << "No keypoints found." << endl;
+
+							bowide.compute(img_read, Keypoint_img_test, croppedBowdecriptor);
+							if (croppedBowdecriptor.empty()) cout << "No descriptors found." << endl;
+
+							s1 = croppedBowdecriptor.size();
+
+							if (s1.width == 0)
+							{
+								croppedBowdecriptor = Mat(1, 200, CV_32F, Scalar(0.));
+								s1 = croppedBowdecriptor.size();
+							}
+
+							if (m == 0)
+							{
+								levelBowdescriptor = croppedBowdecriptor;
+							}
+							else
+							{
+								hconcat(levelBowdescriptor, croppedBowdecriptor, levelBowdescriptor);
+							}
+						}
+
+						//Feature vectors of each levels
+						levelBowdescriptors[k] = levelBowdescriptor;
+
+					}
+
+					Mat kernels;
+					//Weight the features of level according to the equation given in paper.
+					for (int i = 0; i <= SPATIAL_LEVEL; i++)
+					{
+						s = kernels.size();
+
+						levelBowdescriptor = levelBowdescriptors[i];
+						float weight = ((float)pow(2, 2 - i));
+						levelBowdescriptor = levelBowdescriptor / weight;
+
+						if (s.width == 0 && s.height == 0) kernels = levelBowdescriptor;
+						else hconcat(kernels, levelBowdescriptor, kernels);
+
+					}
+
+
+					if (SPM_MODE == 1)
+					{
+						test_data.push_back(levelBowdescriptors[SELECT_LEVE]);
+						test_data_label.push_back(sample_cnt);
+					}
+					else if (SPM_MODE == 2)
+					{
+						test_data.push_back(kernels);
+						test_data_label.push_back(sample_cnt);
+					}
+
+					cout << "\b\b\b\b\b";
+				}
+
+			}
+		}
+
+		i++;
+
+		if (sample_cnt > SMPLE_CLASS) break;
+
+	} while (_findnext(handle_test, &fd_test) == 0);
+
+	_findclose(handle_test);
+
+	FileStorage fs3("test_data.yml", FileStorage::WRITE);
+	fs3 << "test_data" << test_data;
+	fs3.release();
+	FileStorage fs4("test_data_label.yml", FileStorage::WRITE);
+	fs4 << "test_data_label" << test_data_label;
+	fs4.release();
+
+	/* 
+		// Load the vocabulary from file.
+		Mat test_data(0, 0, CV_32FC1);;
+		FileStorage fs3("test_data.yml", FileStorage::READ);
+		fs3["test_data"] >> test_data;
+		fs3.release();
+		Mat test_data_label(0, 1, CV_32FC1);;
+		FileStorage fs4("test_data_label.yml", FileStorage::READ);
+		fs4["test_data_label"] >> test_data_label;
+		fs4.release();
+	*/
+	Mat result_test;
 	float count_test = 0, accuracy_test = 0;
 
-	for (size_t i = 0; i < filenames_test.size(); i++)
+	svm->predict(test_data, result_test);
+
+	for (int i = 0; i < test_data_label.rows; i++)
 	{
-		Mat imgDescriptor_test;
-
-		vector< KeyPoint > Keypoint_img_test;
-
-		Mat img_t = imread(filenames_test[i], IMREAD_GRAYSCALE);
-		extractor->detect(img_t, Keypoint_img_test);
-		if (Keypoint_img_test.empty()) cout << "No keypoints found." << endl;
-
-		bowide.compute(img_t, Keypoint_img_test, imgDescriptor_test);
-		if (imgDescriptor_test.empty()) cout << "No descriptors found." << endl;
-
-		TEST_descriptor.push_back(imgDescriptor_test);
-
-	}
-
-	svm->predict(TEST_descriptor, result_test);
-
-	cout << "test : \n" << result_test << endl;
-
-	for (i = 0; i < test_answer.rows; i++)
-	{
-		if (result_test.at<float>(i, 0) == test_answer.at<float>(i, 0))
+		if (result_test.at<float>(i, 0) == test_data_label.at<int>(i, 0))
 		{
 			count_test = count_test + 1;
 		}
 	}
 
 
-	accuracy_test = (count_test / test_answer.rows) * 100;
+	accuracy_test = (count_test / test_data_label.rows) * 100;
 
-	cout << "accuracy : " << accuracy_test << endl;
-	
+	cout << "\naccuracy : " << accuracy_test << endl;
+
+
+	cout << "-------SVM_TRAIN SAVE ---------\n";
+	cout << "\n\n";
+
+	svm->save("./svm/svm_Class" + to_string(SMPLE_CLASS + 1) + "_spm_mode_" + to_string(SPM_MODE) + "_level_" + to_string(SELECT_LEVE) + "_test_acc" + to_string(accuracy_test) + "_train_acc" + to_string(accuracy_train) + "weight");
+
 	return 0;
-	
-	
+
+
 }
 
 Mat train_descriptor(Mat img)
@@ -304,7 +599,7 @@ Mat train_descriptor(Mat img)
 	{
 		cout << "image load fail" << std::endl;
 	}
-	
+
 	vector< KeyPoint > Keypoint_img;
 	Mat img1_descriptors;
 
