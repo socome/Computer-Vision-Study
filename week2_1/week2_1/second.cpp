@@ -18,13 +18,13 @@ using namespace cv;
 using namespace cv::xfeatures2d;
 using namespace ml;
 
-#define SMPLE_CLASS 4
+#define SMPLE_CLASS 102
 #define num_cluster 200
 #define SPATIAL_LEVEL 2
 #define SELECT_LEVE 2
-#define SPM_MODE 1 // (1: NOMAL / 2: PYRAMID)
+#define SPM_MODE 2 // (1: NOMAL / 2: PYRAMID)
+#define STEP_SIZE 8
 
-Mat train_descriptor(Mat img1);
 static bool writeVocabulary(const string& filename, const Mat& vocabulary);
 static bool readVocabulary(const string& filename, Mat& vocabulary);
 
@@ -65,12 +65,16 @@ int main()
 
 				Mat img_read = imread(filenames[j],IMREAD_GRAYSCALE);
 
-
-				Detector->detect(img_read, Keypoint_img);
+				for (int m = STEP_SIZE; m < img_read.rows - STEP_SIZE; m += STEP_SIZE)
+				{
+					for (int n = STEP_SIZE; n < img_read.cols - STEP_SIZE; n += STEP_SIZE)
+					{
+						Keypoint_img.push_back(KeyPoint(float(n), float(m), float(STEP_SIZE)));
+					}
+				}
 				extractor->compute(img_read, Keypoint_img, img1_descriptors);
 
-				Mat descriptors = train_descriptor(img_read);
-				training_descriptors_S.push_back(descriptors);
+				training_descriptors_S.push_back(img1_descriptors);
 
 				cout << "\b\b\b\b\b";
 
@@ -104,15 +108,15 @@ int main()
 	BOWImgDescriptorExtractor bowide(extractor, matcher);
 	bowide.setVocabulary(vocabulary);
 
-	writeVocabulary("vocabulary_"+to_string(SMPLE_CLASS + 1)+"_"+to_string(num_cluster), vocabulary);
+	writeVocabulary("vocabulary_"+to_string(SMPLE_CLASS + 1)+"_"+to_string(num_cluster)+" dense_SIFT", vocabulary);
 	*/
 
 
 
 	Mat vocabulary;
-	readVocabulary("vocabulary_" + to_string(num_cluster), vocabulary);
+	readVocabulary("vocabulary_102_200 dense_SIFT", vocabulary);
 
-	Ptr<DescriptorMatcher> matcher = BFMatcher::create();
+	Ptr<DescriptorMatcher> matcher = FlannBasedMatcher::create();
 	BOWImgDescriptorExtractor bowide(extractor, matcher);
 	bowide.setVocabulary(vocabulary);
 
@@ -122,6 +126,7 @@ int main()
 	cout << "\n------- SVM TRAIN ---------\n" << endl;
 
 
+	/*
 	Mat SVM_train_data(0, 0, CV_32FC1);
 	Mat SVM_train_label(0, 1, CV_32FC1);
 	Mat levelBowdescriptors[SPATIAL_LEVEL + 1];
@@ -150,7 +155,6 @@ int main()
 
 			sample_cnt++;
 			cout << fd_train.name << " : " << sample_cnt << endl;
-
 
 			for (size_t j = 0; j < filenames.size(); j++)
 			{
@@ -193,7 +197,14 @@ int main()
 
 						Keypoint_img_train.clear();
 
-						extractor->detect(img_read, Keypoint_img_train);
+						for (int m = STEP_SIZE; m < img_read.rows - STEP_SIZE; m += STEP_SIZE)
+						{
+							for (int n = STEP_SIZE; n < img_read.cols - STEP_SIZE; n += STEP_SIZE)
+							{
+								Keypoint_img_train.push_back(KeyPoint(float(n), float(m), float(STEP_SIZE)));
+							}
+						}
+
 						if (Keypoint_img_train.empty()) cout << "No keypoints found." << endl;
 
 						bowide.compute(img_read, Keypoint_img_train, croppedBowdecriptor);
@@ -221,7 +232,7 @@ int main()
 					levelBowdescriptors[k] = levelBowdescriptor;
 
 				}
-				
+
 				if (SPM_MODE == 1)
 				{
 					SVM_train_data.push_back(levelBowdescriptors[SELECT_LEVE]);
@@ -272,7 +283,7 @@ int main()
 	FileStorage fs2("SVM_train_label.yml", FileStorage::WRITE);
 	fs2 << "SVM_train_label" << SVM_train_label;
 	fs2.release();
-	/*
+	*/
 	// Load the vocabulary from file.
 	Mat SVM_train_data(0, 0, CV_32FC1);;
 	FileStorage fs1("SVM_train_data.yml", FileStorage::READ);
@@ -282,16 +293,16 @@ int main()
 	FileStorage fs2("SVM_train_label.yml", FileStorage::READ);
 	fs2["SVM_train_label"] >> SVM_train_label;
 	fs2.release();
-	*/
+
 
 	cout << "\n------- SVM TRAIN AUTO ---------\n" << endl;
 
 	Ptr<SVM> svm = SVM::create();
 	svm->setType(SVM::C_SVC);
 	svm->setKernel(SVM::RBF);
-	svm->setTermCriteria(TermCriteria(TermCriteria::MAX_ITER, 1000, 1e-6));
+	svm->setTermCriteria(TermCriteria(TermCriteria::MAX_ITER, 100, 1e-6));
 	svm->setGamma(1.0);
-	svm->setC(1.0);
+	svm->setC(5.0);
 
 	// Train the SVM with given parameters
 	Ptr<TrainData> td = TrainData::create(SVM_train_data, ROW_SAMPLE, SVM_train_label);
@@ -317,7 +328,7 @@ int main()
 
 
 	cout << "\n------- TEST ---------\n" << endl;
-
+	/*
 	Mat test_data(0, 0, CV_32FC1);;
 	Mat test_data_label(0, 1, CV_32FC1);;
 
@@ -337,6 +348,7 @@ int main()
 
 			sample_cnt++;
 			cout << fd_test.name << " : " << sample_cnt << endl;
+
 
 			for (size_t j = 0; j < filenames.size(); j++)
 			{
@@ -378,7 +390,14 @@ int main()
 
 							Keypoint_img_test.clear();
 
-							extractor->detect(img_read, Keypoint_img_test);
+							for (int m = STEP_SIZE; m < img_read.rows - STEP_SIZE; m += STEP_SIZE)
+							{
+								for (int n = STEP_SIZE; n < img_read.cols - STEP_SIZE; n += STEP_SIZE)
+								{
+									Keypoint_img_test.push_back(KeyPoint(float(n), float(m), float(STEP_SIZE)));
+								}
+							}
+
 							if (Keypoint_img_test.empty()) cout << "No keypoints found." << endl;
 
 							bowide.compute(img_read, Keypoint_img_test, croppedBowdecriptor);
@@ -476,7 +495,14 @@ int main()
 
 							Keypoint_img_test.clear();
 
-							extractor->detect(img_read, Keypoint_img_test);
+							for (int m = STEP_SIZE; m < img_read.rows - STEP_SIZE; m += STEP_SIZE)
+							{
+								for (int n = STEP_SIZE; n < img_read.cols - STEP_SIZE; n += STEP_SIZE)
+								{
+									Keypoint_img_test.push_back(KeyPoint(float(n), float(m), float(STEP_SIZE)));
+								}
+							}
+
 							if (Keypoint_img_test.empty()) cout << "No keypoints found." << endl;
 
 							bowide.compute(img_read, Keypoint_img_test, croppedBowdecriptor);
@@ -552,18 +578,18 @@ int main()
 	FileStorage fs4("test_data_label.yml", FileStorage::WRITE);
 	fs4 << "test_data_label" << test_data_label;
 	fs4.release();
-
-	/* 
-		// Load the vocabulary from file.
-		Mat test_data(0, 0, CV_32FC1);;
-		FileStorage fs3("test_data.yml", FileStorage::READ);
-		fs3["test_data"] >> test_data;
-		fs3.release();
-		Mat test_data_label(0, 1, CV_32FC1);;
-		FileStorage fs4("test_data_label.yml", FileStorage::READ);
-		fs4["test_data_label"] >> test_data_label;
-		fs4.release();
 	*/
+
+	// Load the vocabulary from file.
+	Mat test_data(0, 0, CV_32FC1);;
+	FileStorage fs3("test_data.yml", FileStorage::READ);
+	fs3["test_data"] >> test_data;
+	fs3.release();
+	Mat test_data_label(0, 1, CV_32FC1);;
+	FileStorage fs4("test_data_label.yml", FileStorage::READ);
+	fs4["test_data_label"] >> test_data_label;
+	fs4.release();
+
 	Mat result_test;
 	float count_test = 0, accuracy_test = 0;
 
@@ -586,32 +612,12 @@ int main()
 	cout << "-------SVM_TRAIN SAVE ---------\n";
 	cout << "\n\n";
 
-	svm->save("./svm/svm_Class" + to_string(SMPLE_CLASS + 1) + "_spm_mode_" + to_string(SPM_MODE) + "_level_" + to_string(SELECT_LEVE) + "_test_acc" + to_string(accuracy_test) + "_train_acc" + to_string(accuracy_train) + "weight");
+	svm->save("./svm/svm_Class" + to_string(SMPLE_CLASS + 1) + "_spm_mode_" + to_string(SPM_MODE) + "_level_" + to_string(SELECT_LEVE) + "_test_acc" + to_string(accuracy_test) + "_train_acc" + to_string(accuracy_train) + "_FLANN");
 
 	return 0;
 
 
 }
-
-Mat train_descriptor(Mat img)
-{
-	if (img.empty())
-	{
-		cout << "image load fail" << std::endl;
-	}
-
-	vector< KeyPoint > Keypoint_img;
-	Mat img1_descriptors;
-
-	Ptr<FeatureDetector> Detector = SIFT::create();
-	Ptr<DescriptorExtractor> Extractor = SIFT::create();
-	Detector->detect(img, Keypoint_img);
-	Extractor->compute(img, Keypoint_img, img1_descriptors);
-
-	return img1_descriptors;
-}
-
-
 
 static bool writeVocabulary(const string& filename, const Mat& vocabulary)
 {
